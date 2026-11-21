@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block titulo %}Não conformidades — {{ auditoria.projeto.nome }}{% endblock %}
+{% block conteudo %}
+<div class="cabecalho-secao">
+  <div>
+    <h1>Não conformidades por severidade</h1>
+    <p class="sub">{{ auditoria.projeto.nome }} · {{ auditoria.get_status_display }}{% if auditoria.data_conclusao %} em {{ auditoria.data_conclusao|date:"d/m/Y" }}{% endif %} · {{ auditoria.base }} · Auditor(a): {{ auditoria.auditor.get_full_name|default:auditoria.auditor.username }}</p>
+  </div>
+  {% if pode_exportar %}
+  <div class="acoes">
+    <form method="post" action="{% url 'relatorios:exportar' auditoria.pk 'html' %}">{% csrf_token %}<button class="botao" type="submit">Exportar HTML</button></form>
+    <form method="post" action="{% url 'relatorios:exportar' auditoria.pk 'pdf' %}">{% csrf_token %}<button class="botao botao-primario" type="submit">Exportar PDF</button></form>
+  </div>
+  {% endif %}
+</div>
+{% if not auditoria.concluida %}
+<div class="nota" role="status">A exportação fica disponível quando a auditoria for concluída (RN06). Pendências: {{ pendencias|length }}.</div>
+{% endif %}
+<form method="get" class="cartao filtros" aria-label="Filtros">
+  <div><label for="f-sev">Severidade</label><select id="f-sev" name="severidade"><option value="">Todas</option>{% for v, r in niveis %}<option value="{{ v }}" {% if filtros.severidade == v %}selected{% endif %}>{{ r }}</option>{% endfor %}</select></div>
+  <div><label for="f-pag">Página</label><select id="f-pag" name="pagina"><option value="">Todas</option>{% for p in paginas %}<option value="{{ p.pk }}" {% if filtros.pagina == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.nome_rota }}</option>{% endfor %}</select></div>
+  <div><label for="f-pri">Princípio</label><select id="f-pri" name="principio"><option value="">Todos</option>{% for v, r in principios %}<option value="{{ v }}" {% if filtros.principio == v %}selected{% endif %}>{{ r }}</option>{% endfor %}</select></div>
+  <div><button class="botao" type="submit">Filtrar</button></div>
+</form>
+{% if apontamentos %}
+<table>
+  <caption>Ordenação: Alta → Média → Baixa; empate pela pontuação.</caption>
+  <thead><tr><th scope="col">Severidade</th><th scope="col">Critério</th><th scope="col">Página</th><th scope="col">Descrição</th><th scope="col">Impacto × alcance</th><th scope="col">Evidências</th></tr></thead>
+  <tbody>{% for r in apontamentos %}{% with nc=r.nao_conformidade %}
+    <tr>
+      <td><span class="selo selo-{{ nc.nivel_severidade|lower }}">{{ nc.get_nivel_severidade_display }}</span></td>
+      <th scope="row">{{ r.criterio.codigo }} · {{ r.criterio.referencias_normativas }}</th>
+      <td>{{ r.pagina.nome_rota }}</td>
+      <td>{{ nc.descricao_falha }}</td>
+      <td>{{ nc.impacto_curto }} × {{ nc.alcance_curto }} = {{ nc.pontuacao_severidade }}</td>
+      <td><ul class="compacta">{% for e in nc.evidencias.all %}<li>{{ e }}</li>{% endfor %}</ul></td>
+    </tr>
+  {% endwith %}{% endfor %}</tbody>
+</table>
+{% else %}<p>Nenhuma não conformidade encontrada com os filtros atuais.</p>{% endif %}
+{% endblock %}

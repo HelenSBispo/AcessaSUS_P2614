@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Relatório de auditoria — {{ auditoria.projeto.nome }}</title>
+<style>
+  @page { size: A4; margin: 2cm; @bottom-right { content: "Página " counter(page) " de " counter(pages); font-size: 9pt; } }
+  body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: 10.5pt; color: #111; line-height: 1.4; }
+  h1 { font-size: 17pt; color: #0b2e59; margin-bottom: 4px; } h2 { font-size: 13pt; color: #0b2e59; margin-top: 18px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; } th, td { border: 1px solid #888; padding: 5px; text-align: left; vertical-align: top; font-size: 9.5pt; }
+  thead th { background: #dce6f2; } .alta { color: #8a1111; font-weight: bold; } .media { color: #6b4300; font-weight: bold; } .baixa { color: #0b3d75; font-weight: bold; }
+  .meta td { border: none; padding: 2px 6px 2px 0; } .nota { font-size: 9pt; color: #333; }
+</style>
+</head>
+<body>
+<main>
+<h1>Relatório de auditoria de acessibilidade</h1>
+<table class="meta" role="presentation">
+  <tr><td><strong>Projeto:</strong> {{ auditoria.projeto.nome }} ({{ auditoria.projeto.esfera_orgao }})</td></tr>
+  <tr><td><strong>Base normativa:</strong> {{ auditoria.base }}</td></tr>
+  <tr><td><strong>Auditor(a):</strong> {{ auditoria.auditor.get_full_name|default:auditoria.auditor.username }} · <strong>Concluída em:</strong> {{ auditoria.data_conclusao|date:"d/m/Y H:i" }} · <strong>Emitido em:</strong> {{ gerado_em|date:"d/m/Y H:i" }}</td></tr>
+  <tr><td><strong>Páginas:</strong> {% for p in auditoria.paginas.all %}{{ p.nome_rota }} ({{ p.url }}){% if not forloop.last %}; {% endif %}{% endfor %}</td></tr>
+</table>
+<h2>Resumo</h2>
+<p>{{ apontamentos|length }} não conformidades: {{ contagem.ALTA }} de severidade Alta, {{ contagem.MEDIA }} Média e {{ contagem.BAIXA }} Baixa.</p>
+<p class="nota">A severidade é um método de priorização definido pela equipe AcessaSUS (pontuação = peso do impacto × peso do alcance, com piso por impacto). As normas fundamentam o critério violado, não a escala de severidade.</p>
+<h2>Não conformidades ordenadas por severidade</h2>
+{% if apontamentos %}
+<table>
+  <thead><tr><th scope="col">Severidade</th><th scope="col">Critério e referência</th><th scope="col">Página</th><th scope="col">Descrição</th><th scope="col">Impacto / alcance / pontuação</th><th scope="col">Evidências</th></tr></thead>
+  <tbody>{% for r in apontamentos %}{% with nc=r.nao_conformidade %}
+    <tr>
+      <td class="{{ nc.nivel_severidade|lower }}">{{ nc.get_nivel_severidade_display }}</td>
+      <td>{{ r.criterio.codigo }} — {{ r.criterio.titulo }}<br>{{ r.criterio.obter_detalhes_diretriz }}</td>
+      <td>{{ r.pagina.nome_rota }}<br>{{ r.pagina.url }}</td>
+      <td>{{ nc.descricao_falha }}</td>
+      <td>{{ nc.get_impacto_usuario_display }} / {{ nc.get_alcance_barreira_display }} / {{ nc.pontuacao_severidade }}</td>
+      <td>{% for e in nc.evidencias.all %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+    </tr>
+  {% endwith %}{% endfor %}</tbody>
+</table>
+{% else %}<p>Nenhuma não conformidade registrada.</p>{% endif %}
+<h2>Resultados de todos os critérios avaliados</h2>
+<table>
+  <thead><tr><th scope="col">Página</th><th scope="col">Critério</th><th scope="col">Resultado</th><th scope="col">Justificativa</th></tr></thead>
+  <tbody>{% for r in resultados %}<tr><td>{{ r.pagina.nome_rota }}</td><td>{{ r.criterio.codigo }} — {{ r.criterio.titulo }}</td><td>{{ r.get_status_display }}</td><td>{{ r.justificativa|default:"—" }}</td></tr>{% endfor %}</tbody>
+</table>
+<p class="nota">Este relatório não contém dados pessoais de pacientes (RN04).</p>
+</main>
+</body>
+</html>
