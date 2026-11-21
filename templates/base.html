@@ -1,0 +1,44 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}AcessaSUS{% endblock %} · AcessaSUS</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+  <a class="pular" href="#conteudo">Pular para o conteúdo</a>
+  <header class="topo">
+    <a class="marca" href="{% url 'painel' %}">AcessaSUS</a>
+    <span class="marca-sub">eMAG 3.1 · ABNT NBR 17225:2025 · WCAG 2.2</span>
+    {% if user.is_authenticated %}
+      <div class="usuario">
+        <span>{{ user.get_full_name|default:user.username }}{% if perfil_usuario %} ({{ perfil_usuario }}){% endif %}</span>
+        <form method="post" action="{% url 'contas:sair' %}">{% csrf_token %}<button type="submit" class="botao botao-claro">Sair</button></form>
+      </div>
+    {% endif %}
+  </header>
+  <div class="layout">
+    {% if user.is_authenticated %}
+    <nav class="menu" aria-label="Menu principal">
+      <ul>
+        <li><a href="{% url 'painel' %}" {% if request.resolver_match.url_name == 'painel' %}aria-current="page"{% endif %}>Painel</a></li>
+        <li><a href="{% url 'projetos:lista' %}" {% if request.resolver_match.app_name == 'projetos' %}aria-current="page"{% endif %}>Projetos e páginas</a></li>
+        {% if pode_executar_auditoria %}<li><a href="{% url 'auditorias:nova' %}" {% if request.resolver_match.url_name == 'nova' %}aria-current="page"{% endif %}>Nova auditoria</a></li>{% endif %}
+      </ul>
+    </nav>
+    {% endif %}
+    <main id="conteudo" tabindex="-1">
+      {% if messages %}
+        <div class="mensagens">
+          {% for message in messages %}
+            <p class="mensagem mensagem-{{ message.tags }}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}">{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% block conteudo %}{% endblock %}
+    </main>
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
