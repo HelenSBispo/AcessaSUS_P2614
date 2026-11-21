@@ -1,0 +1,33 @@
+# Ambiente de homologação/demonstração (C2: Aplicação Web + PostgreSQL + volume de evidências)
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: acessasus
+      POSTGRES_USER: ${POSTGRES_USER:-acessasus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - dados_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-acessasus} -d acessasus"]
+      interval: 5s
+      retries: 10
+
+  web:
+    build: .
+    env_file: .env
+    environment:
+      POSTGRES_DB: acessasus
+      POSTGRES_HOST: db
+      DJANGO_MEDIA_ROOT: /app/media
+    ports:
+      - "8000:8000"
+    volumes:
+      - evidencias:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  dados_db:
+  evidencias:
