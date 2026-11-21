@@ -1,0 +1,31 @@
+[project]
+name = "acessasus"
+version = "0.3.0"
+description = "Plataforma de apoio à auditoria de acessibilidade digital em serviços do SUS (Projeto Integrador COMP0503/UFS)"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings_test"
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = ["e2e: testes de navegador (Playwright + axe-core); exigem servidor e Chromium"]
+
+[tool.coverage.run]
+source = ["apps"]
+omit = ["*/migrations/*", "*/admin.py", "*/management/*"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "DJ", "C90", "S"]
+ignore = ["S101", "DJ001"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106"]
