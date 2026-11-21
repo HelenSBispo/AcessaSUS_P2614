@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}Avaliar {{ criterio.codigo }}{% endblock %}
+{% block conteudo %}
+<p><a href="{% url 'auditorias:checklist' auditoria.pk %}?pagina={{ pagina.pk }}">Voltar ao checklist</a></p>
+<h1>{{ criterio.codigo }} — {{ criterio.titulo }}</h1>
+<p class="sub">{{ criterio.referencias_normativas }} (nível {{ criterio.nivel_exigido }}) · Página: {{ pagina.nome_rota }} ({{ pagina.url }})</p>
+<p class="dica">{{ criterio.orientacao_verificacao }}</p>
+<form method="post" enctype="multipart/form-data" class="cartao" novalidate>
+  {% csrf_token %}
+  {% include "_form_erros.html" %}
+  {{ form.status.as_field_group }}
+  {{ form.justificativa.as_field_group }}
+  <fieldset class="painel-nc">
+    <legend>Não conformidade (preencha se o resultado for Não Conforme)</legend>
+    {{ form.descricao.as_field_group }}
+    <div class="linha">
+      <div>{{ form.impacto.as_field_group }}</div>
+      <div>{{ form.alcance.as_field_group }}</div>
+    </div>
+    <p id="previa-severidade" class="nota" role="status" aria-live="polite">{% if nc %}Severidade atual: {{ nc.get_nivel_severidade_display }} (pontuação {{ nc.pontuacao_severidade }}).{% endif %}</p>
+    <fieldset>
+      <legend>Evidências (pelo menos uma; a observação textual é suficiente)</legend>
+      {% if nc and nc.evidencias.all %}
+        <p>Evidências já registradas:</p>
+        <ul>{% for e in nc.evidencias.all %}<li>{{ e }}</li>{% endfor %}</ul>
+      {% endif %}
+      {{ form.observacao.as_field_group }}
+      {{ form.trecho_codigo.as_field_group }}
+      {{ form.url_evidencia.as_field_group }}
+      {{ form.captura.as_field_group }}
+    </fieldset>
+  </fieldset>
+  <button type="submit" class="botao botao-primario">Salvar avaliação</button>
+  <a class="botao" href="{% url 'auditorias:checklist' auditoria.pk %}?pagina={{ pagina.pk }}">Cancelar</a>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{% static 'js/severidade.js' %}" data-url="{% url 'auditorias:severidade' %}" defer></script>{% endblock %}

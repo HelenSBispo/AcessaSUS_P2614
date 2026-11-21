@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titulo %}Nova auditoria{% endblock %}
+{% block conteudo %}
+<h1>Nova auditoria</h1>
+<p class="sub">Selecione o projeto, as páginas abrangidas e a base normativa. A versão vigente vem pré-selecionada.</p>
+<form method="get" class="cartao" aria-label="Escolher projeto">
+  <label for="id_escolha_projeto">Projeto</label>
+  <select id="id_escolha_projeto" name="projeto">
+    {% for p in form.fields.projeto.queryset %}<option value="{{ p.pk }}" {% if projeto and p.pk == projeto.pk %}selected{% endif %}>{{ p.nome }}</option>{% empty %}<option value="">Nenhum projeto cadastrado</option>{% endfor %}
+  </select>
+  <button type="submit" class="botao">Carregar páginas</button>
+</form>
+{% if projeto or form.is_bound %}
+<form method="post" class="cartao" novalidate>
+  {% csrf_token %}
+  {% include "_form_erros.html" %}
+  {{ form.projeto.as_field_group }}
+  {{ form.paginas.as_field_group }}
+  {{ form.base.as_field_group }}
+  <p class="nota">A auditoria fica vinculada a esta versão do checklist mesmo que ele seja atualizado depois (DM-03).</p>
+  <button type="submit" class="botao botao-primario">Iniciar auditoria</button>
+</form>
+{% endif %}
+{% endblock %}

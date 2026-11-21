@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block titulo %}Checklist — {{ auditoria.projeto.nome }}{% endblock %}
+{% block conteudo %}
+<div class="cabecalho-secao">
+  <div>
+    <h1>Checklist — {{ auditoria.projeto.nome }}</h1>
+    <p class="sub">{{ auditoria.base }} · Situação: {{ auditoria.get_status_display }} · Progresso: {{ feitos }} de {{ esperado }} avaliações</p>
+  </div>
+  <div class="acoes">
+    <a class="botao" href="{% url 'relatorios:consulta' auditoria.pk %}">Não conformidades</a>
+    {% if pode_editar %}
+    <form method="post" action="{% url 'auditorias:concluir' auditoria.pk %}">{% csrf_token %}<button type="submit" class="botao botao-primario">Concluir auditoria</button></form>
+    {% endif %}
+  </div>
+</div>
+<nav aria-label="Páginas da auditoria" class="abas">
+  <ul>{% for p in paginas %}<li><a href="?pagina={{ p.pk }}" {% if p.pk == pagina.pk %}aria-current="page"{% endif %}>{{ p.nome_rota }}</a></li>{% endfor %}</ul>
+</nav>
+<p class="sub">Página avaliada: <strong>{{ pagina.nome_rota }}</strong> — {{ pagina.url }}</p>
+{% for principio, criterios in grupos.items %}
+<section aria-labelledby="principio-{{ forloop.counter }}">
+  <h2 id="principio-{{ forloop.counter }}">{{ principio }}</h2>
+  <ul class="lista-criterios">
+  {% for c in criterios %}
+    <li class="criterio" id="criterio-{{ c.pk }}">
+      <p class="codigo">{{ c.codigo }} · {{ c.referencias_normativas }} ({{ c.nivel_exigido }})</p>
+      <h3>{{ c.titulo }}</h3>
+      <p class="dica">{{ c.orientacao_verificacao }}</p>
+      <p>Resultado:
+        {% if c.resultado %}
+          <span class="selo {% if c.resultado.status == 'CONFORME' %}selo-ok{% elif c.resultado.status == 'NAO_CONFORME' %}selo-alta{% else %}selo-na{% endif %}">{{ c.resultado.get_status_display }}</span>
+          {% if c.resultado.nao_conformidade %} · Severidade <span class="selo selo-{{ c.resultado.nao_conformidade.nivel_severidade|lower }}">{{ c.resultado.nao_conformidade.get_nivel_severidade_display }}</span>{% endif %}
+          {% if c.resultado.justificativa %} · Justificativa: {{ c.resultado.justificativa }}{% endif %}
+        {% else %}<span class="selo selo-pendente">Pendente</span>{% endif %}
+      </p>
+      {% if pode_editar %}<a class="botao" href="{% url 'auditorias:avaliar' auditoria.pk c.pk pagina.pk %}">{% if c.resultado %}Alterar{% else %}Avaliar{% endif %}<span class="visualmente-oculto"> {{ c.codigo }}</span></a>{% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+{% endfor %}
+{% endblock %}
