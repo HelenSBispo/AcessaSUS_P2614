@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titulo %}{{ projeto.nome }}{% endblock %}
+{% block conteudo %}
+<h1>{{ projeto.nome }}</h1>
+<p class="sub">{{ projeto.esfera_orgao }} · {{ projeto.url_base }}</p>
+{% if projeto.descricao %}<p>{{ projeto.descricao }}</p>{% endif %}
+<section class="cartao" aria-labelledby="titulo-paginas">
+  <h2 id="titulo-paginas">Páginas a auditar</h2>
+  {% with paginas=projeto.listar_paginas_mapeadas %}
+  {% if paginas %}
+  <table>
+    <caption class="visualmente-oculto">Páginas do projeto</caption>
+    <thead><tr><th scope="col">Nome da rota</th><th scope="col">URL</th></tr></thead>
+    <tbody>{% for pg in paginas %}<tr><th scope="row">{{ pg.nome_rota }}</th><td>{{ pg.url }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p>Nenhuma página cadastrada.</p>{% endif %}
+  {% endwith %}
+</section>
+{% if pode_editar_projeto %}
+<form method="post" class="cartao" novalidate aria-labelledby="titulo-nova-pagina">
+  <h2 id="titulo-nova-pagina">Adicionar página</h2>
+  {% csrf_token %}
+  {% include "_form_erros.html" %}
+  {{ form.as_div }}
+  <button type="submit" class="botao botao-primario">Adicionar página</button>
+</form>
+{% endif %}
+{% if pode_executar_auditoria and projeto.paginas.exists %}<p><a class="botao" href="{% url 'auditorias:nova' %}?projeto={{ projeto.pk }}">Iniciar auditoria deste projeto</a></p>{% endif %}
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block titulo %}Projetos{% endblock %}
+{% block conteudo %}
+<div class="cabecalho-secao">
+  <h1>Projetos e páginas</h1>
+  {% if pode_editar_projeto %}<a class="botao botao-primario" href="{% url 'projetos:novo' %}">Novo projeto</a>{% endif %}
+</div>
+{% if projetos %}
+<table>
+  <caption class="visualmente-oculto">Projetos cadastrados</caption>
+  <thead><tr><th scope="col">Projeto</th><th scope="col">Órgão/esfera</th><th scope="col">URL base</th><th scope="col">Páginas</th></tr></thead>
+  <tbody>{% for p in projetos %}
+    <tr><th scope="row"><a href="{% url 'projetos:detalhe' p.pk %}">{{ p.nome }}</a></th><td>{{ p.esfera_orgao }}</td><td>{{ p.url_base }}</td><td>{{ p.paginas.all|length }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% else %}<p>Nenhum projeto cadastrado.</p>{% endif %}
+{% endblock %}
