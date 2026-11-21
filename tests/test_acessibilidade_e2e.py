@@ -4,6 +4,7 @@ Executar: pytest -m e2e  (requer Chromium do Playwright: `playwright install chr
 Regras: WCAG 2.0/2.1/2.2 níveis A e AA. Critério: 0 violações.
 """
 
+import importlib
 import os
 
 import pytest
@@ -12,7 +13,7 @@ from django.urls import reverse
 
 os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 
-pytestmark = [pytest.mark.e2e, pytest.mark.django_db(transaction=True, serialized_rollback=True)]
+pytestmark = [pytest.mark.e2e, pytest.mark.django_db(transaction=True)]
 
 TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]
 SENHA = "Demo@AcessaSUS2026"
@@ -20,6 +21,12 @@ SENHA = "Demo@AcessaSUS2026"
 
 @pytest.fixture
 def dados_demo(transactional_db):
+    # Testes transacionais esvaziam o banco ao final; recarrega os dados das migrações de dados.
+    from django.apps import apps as registro
+
+    for modulo in ("apps.contas.migrations.0001_grupos_perfis", "apps.normas.migrations.0002_checklist_v1"):
+        migracao = importlib.import_module(modulo)
+        (getattr(migracao, "criar_grupos", None) or migracao.carregar)(registro, None)
     call_command("seed_demo", senha=SENHA, verbosity=0)
 
 
