@@ -86,4 +86,4 @@ Documentos P1, P2 e P3 entregues no SIGAA. Decisões arquiteturais em [`docs/adr
 
 ## Uso de inteligência artificial
 
-O código inicial deste repositório foi produzido com apoio de IA generativa (Claude, Anthropic), a partir dos requisitos e modelos do P1/P2 da equipe, e revisado pela equipe. Os commits gerados com apoio de IA contêm a linha `Co-Authored-By: Claude`. Ver o registro de uso de IA no documento P3.
+Conforme permitido pelas orientações da disciplina, a equipe utilizou uma ferramenta de IA generativa (Claude, da Anthropic) como apoio no desenvolvimento: na geração da versão inicial do código, na elaboração dos testes automatizados e na documentação técnica. Os requisitos, a modelagem e as decisões de arquitetura seguem os documentos P1 e P2 elaborados pela equipe, e o código foi revisado e validado pelos integrantes. O registro detalhado está no documento P3.
