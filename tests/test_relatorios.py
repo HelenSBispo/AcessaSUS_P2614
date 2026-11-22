@@ -83,3 +83,9 @@ def test_falha_na_geracao_nao_registra_emissao(cliente_gestor, auditoria_com_ncs
 def test_consulta_renderiza(cliente_gestor, auditoria_com_ncs):
     r = cliente_gestor.get(reverse("relatorios:consulta", args=[auditoria_com_ncs.pk]))
     assert r.status_code == 200 and "Alta" in r.content.decode()
+
+
+def test_formato_invalido_nega_exportacao(cliente_gestor, auditoria):
+    r = cliente_gestor.post(reverse("relatorios:exportar", args=[auditoria.pk, "csv"]))
+    assert r.status_code == 403
+    assert not Relatorio.objects.exists()
