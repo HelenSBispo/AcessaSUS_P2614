@@ -1,0 +1,52 @@
+{
+  "autor": "Guilherme Ferreira Amancio",
+  "escopo": "Observacao local complementar para RA-01 (PB08) e RA-02 (PB09)",
+  "ambiente": {
+    "so": "WSL (Ubuntu)",
+    "python": "3.14 (.venv-wsl)",
+    "servidor": "Gunicorn (3 workers sincronos)",
+    "endereco": "http://127.0.0.1:8000",
+    "banco_dados": "SQLite com seed_demo",
+    "alteracoes_codigo": false
+  },
+  "ra_01_pdf_exportacao": {
+    "endpoint": "POST /relatorios/1/exportar/pdf/",
+    "requisito_referencia": "RNF003 / QS-05 / QS-08 (p95 <= 3s com 50 simultaneos)",
+    "probe_inicial": {
+      "status": 200,
+      "bytes": 22844,
+      "tempo_s": 5.42
+    },
+    "rodada_1": [
+      {"concorrencia": 1, "ok": "1/1", "media_s": 5.40, "p95_s": 5.40},
+      {"concorrencia": 5, "ok": "5/5", "media_s": 1.17, "p95_s": 2.94},
+      {"concorrencia": 10, "ok": "10/10", "media_s": 0.94, "p95_s": 1.49},
+      {"concorrencia": 50, "ok": "50/50", "media_s": 4.39, "p95_s": 8.00}
+    ],
+    "rodada_aquecida_warm": [
+      {"concorrencia": 1, "ok": "1/1", "media_s": 0.36, "p95_s": 0.36},
+      {"concorrencia": 10, "ok": "10/10", "media_s": 0.83, "p95_s": 1.33},
+      {"concorrencia": 50, "ok": "50/50", "media_s": 3.95, "p95_s": 7.40}
+    ]
+  },
+  "ra_02_bloqueio_login": {
+    "endpoint": "/contas/entrar/",
+    "usuario_alvo": "auditora@exemplo.org",
+    "falhas_sequenciais_10": {
+      "codigos_http": [200, 200, 200, 200, 200, 200, 200, 200, 200, 200],
+      "mencoes_bloqueio": "0/10",
+      "tempo_medio_s": 0.216
+    },
+    "falhas_concorrentes_15": {
+      "todos_http_200": true,
+      "mencoes_bloqueio": "10/15"
+    },
+    "tentativa_senha_valida_apos_falhas": {
+      "status": 200,
+      "logged_in": false,
+      "url_final": "http://127.0.0.1:8000/contas/entrar/",
+      "mencao_bloqueio": true,
+      "tempo_s": 0.003
+    }
+  }
+}
