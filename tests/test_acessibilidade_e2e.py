@@ -72,7 +72,9 @@ def test_telas_do_auditor(page, live_server, dados_demo):
         _verificar(page, rotulo)
 
 
-def test_telas_do_gestor(page, live_server, dados_demo):
+def test_telas_do_gestor(page, live_server, dados_demo, tmp_path):
+    from playwright.sync_api import expect
+
     from apps.auditorias.models import Auditoria
 
     base = live_server.url
@@ -80,3 +82,11 @@ def test_telas_do_gestor(page, live_server, dados_demo):
     concluida = Auditoria.objects.filter(status="CONCLUIDA").first()
     page.goto(base + reverse("relatorios:consulta", args=[concluida.pk]))
     _verificar(page, "não conformidades por severidade")
+
+    with page.expect_download() as exportacao:
+        page.get_by_role("button", name="Exportar HTML").click()
+    relatorio = tmp_path / "relatorio.html"
+    exportacao.value.save_as(relatorio)
+    page.goto(relatorio.as_uri())
+    expect(page.get_by_role("heading", name="Relatório de auditoria de acessibilidade")).to_be_visible()
+    _verificar(page, "relatório HTML")

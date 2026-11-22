@@ -4,6 +4,7 @@ import pytest
 from django.urls import reverse
 
 from apps.auditorias.servicos import concluir_auditoria
+from apps.relatorios.models import Relatorio
 from tests.conftest import SENHA
 
 PERMITIDO, NEGADO, LOGIN = "permitido", "negado", "login"
@@ -73,6 +74,26 @@ def test_auditor_nao_ve_auditoria_de_outro(client, outro_auditor, auditoria):
     client.force_login(outro_auditor)
     assert client.get(reverse("auditorias:checklist", args=[auditoria.pk])).status_code == 403
     assert client.get(reverse("relatorios:consulta", args=[auditoria.pk])).status_code == 403
+
+
+@pytest.mark.parametrize("perfil", ["outro_auditor", "gestor"])
+def test_registrar_nc_exige_auditor_responsavel(client, auditoria, perfil, request):
+    client.force_login(request.getfixturevalue(perfil))
+    c, p = auditoria.base.criterios.first(), auditoria.paginas.first()
+    r = client.post(
+        reverse("auditorias:avaliar", args=[auditoria.pk, c.pk, p.pk]),
+        {"status": "NAO_CONFORME", "descricao": "Falha", "impacto": "MEDIO", "alcance": "GLOBAL", "observacao": "Evidência"},
+    )
+    assert r.status_code == 403
+    assert not auditoria.resultados.exists()
+
+
+def test_auditor_nao_exporta_auditoria_concluida_de_outro(client, outro_auditor, auditoria, auditor):
+    _concluida(auditoria, auditor)
+    client.force_login(outro_auditor)
+    r = client.post(reverse("relatorios:exportar", args=[auditoria.pk, "html"]))
+    assert r.status_code == 403
+    assert not Relatorio.objects.exists()
 
 
 def test_usuario_sem_perfil_e_negado(client, sem_perfil, auditoria):

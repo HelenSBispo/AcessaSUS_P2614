@@ -72,11 +72,50 @@ def test_nc_sem_parametros_nao_exibe_severidade(cliente_auditor, auditoria):
 
 def test_servico_e_transacional_quando_rn02_falha(auditoria, auditor):
     c, p = auditoria.base.criterios.first(), auditoria.paginas.first()
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match="RN02"):
         registrar_avaliacao(
             auditoria, c, p, auditor, DadosAvaliacao(status="NAO_CONFORME", descricao="x", impacto="BAIXO", alcance="PONTUAL")
         )
     assert not ResultadoChecklist.objects.exists()
+    assert not NaoConformidade.objects.exists()
+    assert not Evidencia.objects.exists()
+
+
+@pytest.mark.parametrize(
+    ("campo", "tipo", "conteudo"),
+    [("trecho_codigo", Evidencia.CODIGO, "<button></button>"), ("url_evidencia", Evidencia.URL, "https://exemplo.gov.br/agendar")],
+)
+def test_evidencia_textual_e_vinculada_ao_resultado(cliente_auditor, auditoria, campo, tipo, conteudo):
+    c, p = auditoria.base.criterios.first(), auditoria.paginas.first()
+    r = cliente_auditor.post(
+        _url_avaliar(auditoria, c, p),
+        {"status": "NAO_CONFORME", "descricao": "Falha", "impacto": "MEDIO", "alcance": "GLOBAL", campo: conteudo},
+    )
+    assert r.status_code == 302
+    resultado = auditoria.resultados.get(criterio=c, pagina=p)
+    assert resultado.status == ResultadoChecklist.NAO_CONFORME
+    evidencia = resultado.nao_conformidade.evidencias.get()
+    assert (evidencia.tipo, evidencia.conteudo) == (tipo, conteudo)
+
+
+def test_url_de_evidencia_com_parametro_pessoal_e_recusada(cliente_auditor, auditoria):
+    c, p = auditoria.base.criterios.first(), auditoria.paginas.first()
+    r = cliente_auditor.post(
+        _url_avaliar(auditoria, c, p),
+        {
+            "status": "NAO_CONFORME",
+            "descricao": "Falha",
+            "impacto": "MEDIO",
+            "alcance": "GLOBAL",
+            "observacao": "Outra evidência válida.",
+            "url_evidencia": "https://exemplo.gov.br/agendar?cns=0",
+        },
+    )
+    assert r.status_code == 400
+    assert "RN04" in r.context["form"].errors["url_evidencia"][0]
+    assert not auditoria.resultados.exists()
+    assert not NaoConformidade.objects.exists()
+    assert not Evidencia.objects.exists()
 
 
 def test_captura_valida_e_anexada(cliente_auditor, auditoria):

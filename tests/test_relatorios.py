@@ -44,9 +44,13 @@ def test_filtro_por_severidade(auditoria_com_ncs):
     }
 
 
-def test_exportacao_bloqueada_em_andamento(cliente_gestor, auditoria_com_ncs):
-    r = cliente_gestor.post(reverse("relatorios:exportar", args=[auditoria_com_ncs.pk, "pdf"]))
-    assert r.status_code == 302
+def test_exportacao_bloqueada_em_andamento(cliente_gestor, auditoria):
+    consulta = reverse("relatorios:consulta", args=[auditoria.pk])
+    r = cliente_gestor.post(reverse("relatorios:exportar", args=[auditoria.pk, "pdf"]), follow=True)
+    assert r.redirect_chain == [(consulta, 302)]
+    assert "RN06" in r.content.decode()
+    assert not r.context["pode_exportar"]
+    assert len(r.context["pendencias"]) == auditoria.total_esperado()
     assert not Relatorio.objects.exists()
 
 
@@ -55,8 +59,11 @@ def test_exportar_html_de_auditoria_concluida(cliente_gestor, auditoria_com_ncs)
     r = cliente_gestor.post(reverse("relatorios:exportar", args=[auditoria_com_ncs.pk, "html"]))
     assert r.status_code == 200 and r["Content-Type"].startswith("text/html")
     html = r.content.decode()
-    assert html.index("Falha") < html.index("Resultados de todos")
-    assert Relatorio.objects.get().formato == "HTML"
+    criterios = list(auditoria_com_ncs.base.criterios.all())
+    posicoes = [html.index(f"Falha {criterios[i].codigo}</td>") for i in (3, 1, 2, 0)]
+    assert posicoes[0] < posicoes[1] < posicoes[2] < posicoes[3] < html.index("Resultados de todos")
+    rel = Relatorio.objects.get()
+    assert rel.formato == "HTML" and rel.auditoria == auditoria_com_ncs
 
 
 def test_exportar_pdf_de_auditoria_concluida(cliente_gestor, auditoria_com_ncs):
@@ -75,8 +82,9 @@ def test_falha_na_geracao_nao_registra_emissao(cliente_gestor, auditoria_com_ncs
         raise RuntimeError("falha simulada")
 
     monkeypatch.setattr("apps.relatorios.views.gerar_pdf", falhar)
-    r = cliente_gestor.post(reverse("relatorios:exportar", args=[auditoria_com_ncs.pk, "pdf"]))
-    assert r.status_code == 302
+    r = cliente_gestor.post(reverse("relatorios:exportar", args=[auditoria_com_ncs.pk, "pdf"]), follow=True)
+    assert r.redirect_chain == [(reverse("relatorios:consulta", args=[auditoria_com_ncs.pk]), 302)]
+    assert "Não foi possível gerar o relatório" in r.content.decode()
     assert not Relatorio.objects.exists()
 
 
