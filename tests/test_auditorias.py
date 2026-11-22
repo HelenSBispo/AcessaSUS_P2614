@@ -7,8 +7,10 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
-from apps.auditorias.models import Evidencia, NaoConformidade, ResultadoChecklist
-from apps.auditorias.servicos import DadosAvaliacao, concluir_auditoria, registrar_avaliacao
+from apps.auditorias.models import Auditoria, Evidencia, NaoConformidade, ResultadoChecklist
+from apps.auditorias.servicos import DadosAvaliacao, concluir_auditoria, iniciar_auditoria, registrar_avaliacao
+from apps.normas.models import BaseNormativa
+from apps.projetos.models import Projeto
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 
@@ -24,6 +26,30 @@ def test_iniciar_auditoria_pela_tela(cliente_auditor, projeto, base):
     assert r.status_code == 302
     aud = projeto.auditorias.get()
     assert aud.status == "EM_ANDAMENTO" and aud.base == base and aud.paginas.count() == 2
+
+
+def test_nao_inicia_auditoria_com_base_sem_criterios(cliente_auditor, projeto, base):
+    vazia = BaseNormativa.objects.create(nome="Base de teste", versao="0.1", data_publicacao=base.data_publicacao)
+    r = cliente_auditor.post(reverse("auditorias:nova"), {"projeto": projeto.pk, "paginas": [projeto.paginas.first().pk], "base": vazia.pk})
+    assert r.status_code == 400
+    assert "A base normativa selecionada não possui critérios." in r.context["form"].non_field_errors()
+    assert not projeto.auditorias.exists()
+
+
+@pytest.mark.parametrize(
+    ("fora_do_projeto", "mensagem"),
+    [(False, "Selecione ao menos uma página"), (True, "devem pertencer ao projeto selecionado")],
+)
+def test_servico_de_inicio_recusa_paginas_invalidas(projeto, base, auditor, fora_do_projeto, mensagem):
+    paginas = []
+    if fora_do_projeto:
+        outro = Projeto.objects.create(
+            nome="Outro portal", esfera_orgao="SMS fictícia", url_base="https://outro.exemplo.org", criado_por=auditor
+        )
+        paginas = [projeto.paginas.first(), outro.adicionar_pagina("Inicial", outro.url_base)]
+    with pytest.raises(ValidationError, match=mensagem):
+        iniciar_auditoria(projeto, paginas, base, auditor)
+    assert not Auditoria.objects.exists()
 
 
 def test_nao_aplicavel_exige_justificativa(cliente_auditor, auditoria):
@@ -68,6 +94,95 @@ def test_nc_sem_parametros_nao_exibe_severidade(cliente_auditor, auditoria):
     r = cliente_auditor.post(_url_avaliar(auditoria, c, p), {"status": "NAO_CONFORME", "descricao": "Falha", "observacao": "obs"})
     assert r.status_code == 400
     assert not NaoConformidade.objects.exists()
+
+
+def test_nc_sem_descricao_e_recusada(cliente_auditor, auditoria):
+    c, p = auditoria.base.criterios.first(), auditoria.paginas.first()
+    r = cliente_auditor.post(
+        _url_avaliar(auditoria, c, p),
+        {"status": "NAO_CONFORME", "descricao": " ", "impacto": "BAIXO", "alcance": "PONTUAL", "observacao": "Evidência"},
+    )
+    assert r.status_code == 400
+    assert "Descreva a falha encontrada." in r.context["form"].errors["descricao"]
+    assert not auditoria.resultados.exists()
+
+
+@pytest.mark.parametrize(
+    ("dados", "mensagem"),
+    [
+        (DadosAvaliacao(status="INVALIDO"), "Resultado inválido"),
+        (DadosAvaliacao(status="NAO_APLICAVEL"), "exige justificativa"),
+        (DadosAvaliacao(status="NAO_CONFORME"), "Descreva a falha"),
+        (DadosAvaliacao(status="NAO_CONFORME", descricao="Falha"), "Informe o impacto e o alcance"),
+    ],
+)
+def test_servico_recusa_avaliacoes_incompletas(auditoria, auditor, dados, mensagem):
+    c, p = auditoria.base.criterios.first(), auditoria.paginas.first()
+    with pytest.raises(ValidationError, match=mensagem):
+        registrar_avaliacao(auditoria, c, p, auditor, dados)
+    assert not auditoria.resultados.exists()
+    assert not NaoConformidade.objects.exists()
+
+
+def test_servico_recusa_resultado_para_pagina_fora_da_auditoria(auditoria, auditor):
+    c = auditoria.base.criterios.first()
+    p = auditoria.projeto.adicionar_pagina("Fora do escopo", "https://exemplo.gov.br/fora")
+    with pytest.raises(ValidationError, match="A página não faz parte desta auditoria"):
+        registrar_avaliacao(auditoria, c, p, auditor, DadosAvaliacao(status="CONFORME"))
+    assert not auditoria.resultados.exists()
+
+
+def test_servico_recusa_criterio_fora_da_base(auditoria, auditor):
+    c, p = auditoria.base.criterios.first(), auditoria.paginas.first()
+    auditoria.base.criterios.remove(c)
+    with pytest.raises(ValidationError, match="O critério não pertence à base normativa"):
+        registrar_avaliacao(auditoria, c, p, auditor, DadosAvaliacao(status="CONFORME"))
+    assert not auditoria.resultados.exists()
+
+
+def test_falha_no_armazenamento_reverte_alteracao_da_nc(auditoria, auditor, monkeypatch):
+    c, p = auditoria.base.criterios.first(), auditoria.paginas.first()
+    resultado = registrar_avaliacao(
+        auditoria,
+        c,
+        p,
+        auditor,
+        DadosAvaliacao(
+            status="NAO_CONFORME",
+            descricao="Falha original",
+            impacto="BAIXO",
+            alcance="PONTUAL",
+            evidencias=[(Evidencia.OBSERVACAO, "Evidência original", None)],
+        ),
+    )
+    nc = resultado.nao_conformidade
+    evidencia = nc.evidencias.get()
+
+    def falhar(*args, **kwargs):
+        raise OSError("armazenamento indisponível")
+
+    monkeypatch.setattr(evidencia.arquivo.storage, "save", falhar)
+    with pytest.raises(OSError, match="armazenamento indisponível"):
+        registrar_avaliacao(
+            auditoria,
+            c,
+            p,
+            auditor,
+            DadosAvaliacao(
+                status="NAO_CONFORME",
+                descricao="Falha atualizada",
+                impacto="CRITICO",
+                alcance="GLOBAL",
+                evidencias=[
+                    (Evidencia.OBSERVACAO, "Evidência nova", None),
+                    (Evidencia.CAPTURA, "", SimpleUploadedFile("tela.png", PNG)),
+                ],
+            ),
+        )
+    nc.refresh_from_db()
+    assert (nc.descricao_falha, nc.nivel_severidade) == ("Falha original", "BAIXA")
+    assert nc.evidencias.get() == evidencia
+    assert auditoria.resultados.get() == resultado
 
 
 def test_servico_e_transacional_quando_rn02_falha(auditoria, auditor):
@@ -134,6 +249,38 @@ def test_captura_valida_e_anexada(cliente_auditor, auditoria):
     assert r.status_code == 302
     ev = Evidencia.objects.get()
     assert ev.tipo == Evidencia.CAPTURA and ev.arquivo.name.endswith(".png")
+
+
+def test_editar_nc_mantem_captura_e_recalcula_severidade(cliente_auditor, auditoria, auditor):
+    c, p = auditoria.base.criterios.first(), auditoria.paginas.first()
+    resultado = registrar_avaliacao(
+        auditoria,
+        c,
+        p,
+        auditor,
+        DadosAvaliacao(
+            status="NAO_CONFORME",
+            descricao="Falha original",
+            impacto="BAIXO",
+            alcance="PONTUAL",
+            evidencias=[(Evidencia.CAPTURA, "", SimpleUploadedFile("original.png", PNG))],
+        ),
+    )
+    nc = resultado.nao_conformidade
+    evidencia = nc.evidencias.get()
+    url = _url_avaliar(auditoria, c, p)
+    r = cliente_auditor.get(url)
+    assert r.status_code == 200
+    assert r.context["form"].initial["descricao"] == "Falha original"
+    assert "Captura de tela:" in r.content.decode()
+    r = cliente_auditor.post(url, {"status": "NAO_CONFORME", "descricao": "Falha revista", "impacto": "ALTO", "alcance": "PONTUAL"})
+    assert r.status_code == 302
+    assert auditoria.resultados.get() == resultado
+    nc.refresh_from_db()
+    assert (nc.descricao_falha, nc.nivel_severidade, nc.pontuacao_severidade) == ("Falha revista", "MEDIA", 3)
+    assert nc.evidencias.get() == evidencia
+    with evidencia.arquivo.open("rb") as arquivo:
+        assert arquivo.read() == PNG
 
 
 @pytest.mark.parametrize(
@@ -205,9 +352,23 @@ def test_auditoria_concluida_nao_aceita_alteracao(auditoria, auditor):
         registrar_avaliacao(auditoria, c, p, auditor, DadosAvaliacao(status="CONFORME"))
 
 
+def test_post_nao_altera_avaliacao_de_auditoria_concluida(cliente_auditor, auditoria, auditor):
+    _preencher(auditoria, auditor)
+    assert concluir_auditoria(auditoria) == []
+    c, p = auditoria.base.criterios.first(), auditoria.paginas.first()
+    r = cliente_auditor.post(_url_avaliar(auditoria, c, p), {"status": "NAO_APLICAVEL", "justificativa": "Não se aplica à página."})
+    assert r.status_code == 302 and r["Location"] == reverse("auditorias:checklist", args=[auditoria.pk])
+    assert auditoria.resultados.get(criterio=c, pagina=p).status == ResultadoChecklist.CONFORME
+
+
 def test_previa_de_severidade(cliente_auditor):
     r = cliente_auditor.get(reverse("auditorias:severidade"), {"impacto": "ALTO", "alcance": "PONTUAL"})
     assert r.json() == {"pontuacao": 3, "nivel": "MEDIA", "rotulo": "Média"}
+
+
+def test_previa_de_severidade_recusa_parametro_invalido(cliente_auditor):
+    r = cliente_auditor.get(reverse("auditorias:severidade"), {"impacto": "ALTO", "alcance": "TOTAL"})
+    assert r.status_code == 400 and r.json() == {"erro": "Informe impacto e alcance."}
 
 
 def test_telas_principais_renderizam(cliente_auditor, auditoria):

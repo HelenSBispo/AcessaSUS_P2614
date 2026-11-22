@@ -1,9 +1,13 @@
 """RF006 / RN05 — um teste por célula da matriz de permissões e autenticação."""
 
+from datetime import timedelta
+from types import SimpleNamespace
+
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
-from apps.auditorias.servicos import concluir_auditoria
+from apps.auditorias.servicos import concluir_auditoria, iniciar_auditoria
 from apps.relatorios.models import Relatorio
 from tests.conftest import SENHA
 
@@ -119,6 +123,54 @@ def test_bloqueio_apos_cinco_tentativas(client, auditor):
         client.post(reverse("contas:entrar"), {"username": auditor.username, "password": "errada"})
     r = client.post(reverse("contas:entrar"), {"username": auditor.username, "password": SENHA})
     assert r.status_code == 200 and "bloqueado" in r.content.decode()
+
+
+def test_login_volta_a_funcionar_apos_janela_de_bloqueio(client, auditor, monkeypatch):
+    instante = 0
+    relogio = SimpleNamespace(time=lambda: instante)
+    monkeypatch.setattr("django.core.cache.backends.base.time", relogio)
+    monkeypatch.setattr("django.core.cache.backends.locmem.time", relogio)
+    url = reverse("contas:entrar")
+    for _ in range(5):
+        client.post(url, {"username": auditor.username, "password": "errada"})
+
+    instante = 14 * 60 + 59
+    dados = {"username": auditor.username, "password": SENHA}
+    assert "bloqueado" in client.post(url, dados).content.decode()
+    instante += 1
+    r = client.post(url, dados)
+    assert r.status_code == 302 and r["Location"] == reverse("painel")
+    assert client.get(reverse("painel")).wsgi_request.user == auditor
+
+
+def test_sessao_renova_com_atividade_e_expira_por_inatividade(client, auditor, monkeypatch):
+    instante = timezone.now()
+    monkeypatch.setattr(timezone, "now", lambda: instante)
+    painel = reverse("painel")
+    r = client.post(reverse("contas:entrar"), {"username": auditor.username, "password": SENHA})
+    assert r.status_code == 302
+
+    instante += timedelta(minutes=29)
+    assert client.get(painel).wsgi_request.user == auditor
+    instante += timedelta(minutes=29)
+    assert client.get(painel).wsgi_request.user == auditor
+    instante += timedelta(minutes=30)
+    r = client.get(painel)
+    assert r.status_code == 302
+    assert r["Location"] == f"{reverse('contas:entrar')}?next={painel}"
+
+
+def test_painel_respeita_escopo_do_perfil(client, gestor, auditoria, outro_auditor, auditor):
+    outra = iniciar_auditoria(auditoria.projeto, auditoria.paginas.all(), auditoria.base, outro_auditor)
+    painel = reverse("painel")
+    client.force_login(gestor)
+    r = client.get(painel)
+    assert r.status_code == 200
+    assert {a.pk for a in r.context["auditorias"]} == {auditoria.pk, outra.pk}
+    client.force_login(auditor)
+    r = client.get(painel)
+    assert r.status_code == 200
+    assert [a.pk for a in r.context["auditorias"]] == [auditoria.pk]
 
 
 def test_health_check(client, db):

@@ -93,6 +93,31 @@ def test_consulta_renderiza(cliente_gestor, auditoria_com_ncs):
     assert r.status_code == 200 and "Alta" in r.content.decode()
 
 
+def test_consulta_combina_filtros_de_pagina_e_principio(cliente_gestor, auditoria_com_ncs, auditor):
+    segunda = auditoria_com_ncs.paginas.last()
+    criterio = auditoria_com_ncs.base.criterios.first()
+    esperado = registrar_avaliacao(
+        auditoria_com_ncs,
+        criterio,
+        segunda,
+        auditor,
+        DadosAvaliacao(
+            status="NAO_CONFORME",
+            descricao="Falha de exemplo",
+            impacto="BAIXO",
+            alcance="PONTUAL",
+            evidencias=[(Evidencia.OBSERVACAO, "Evidência", None)],
+        ),
+    )
+    url = reverse("relatorios:consulta", args=[auditoria_com_ncs.pk])
+    r = cliente_gestor.get(url, {"pagina": segunda.pk, "principio": criterio.principio})
+    assert r.status_code == 200
+    assert list(r.context["apontamentos"]) == [esperado]
+    outro_principio = auditoria_com_ncs.base.criterios.exclude(principio=criterio.principio).first().principio
+    r = cliente_gestor.get(url, {"pagina": segunda.pk, "principio": outro_principio})
+    assert r.status_code == 200 and not list(r.context["apontamentos"])
+
+
 def test_formato_invalido_nega_exportacao(cliente_gestor, auditoria):
     r = cliente_gestor.post(reverse("relatorios:exportar", args=[auditoria.pk, "csv"]))
     assert r.status_code == 403
