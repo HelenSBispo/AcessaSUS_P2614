@@ -52,3 +52,40 @@ A cobertura é de linhas de `apps/` com as exclusões de `pyproject.toml`. Para 
 | 15 — Participação | Branch `test/auditoria-cobertura-rastreabilidade-p3` e commit de testes `86064ef`. Vincular a revisão de outro integrante ao PR conforme o CONTRIBUTING |
 
 Restam as verificações manuais de teclado, leitor de tela, zoom/reflow e contraste, a avaliação com usuários e a medição concorrente do RNF003. A emissão isolada de PDF abaixo de três segundos é um indicador funcional local. A qualidade e equivalência do conteúdo do PDF em relação ao HTML exigem inspeção específica. Os testes de parâmetros restritos em URLs demonstram um recorte de RN04. Para a revisão da equipe, registrar no README o uso de Codex na auditoria, nos testes e na rastreabilidade, em continuidade à declaração de uso de IA existente.
+
+## Segunda rodada de revisão da cobertura
+
+Base desta rodada: `304c45f`. O commit `359ccb8` acrescenta 19 casos em quatro arquivos existentes. A priorização considerou o risco funcional, inclusive em módulos que já tinham 100% das linhas. Os comandos, o escopo de `apps/` e as exclusões oficiais foram mantidos. Para a análise de ramificações, foi acrescentado apenas `--cov-branch` à invocação do pytest.
+
+| Prioridade | Diagnóstico na base | Evidência acrescentada |
+| --- | --- | --- |
+| Alta | RF006/RN05/RNF007. Login coberto por linhas, com lacunas na expiração do bloqueio, na renovação por atividade e no escopo do painel | Três casos. Cache e sessão reais com relógios controlados verificam liberação após 15 minutos e expiração após 30 minutos de inatividade. O painel retorna auditorias de todos os responsáveis para o Gestor e apenas as próprias para o Auditor |
+| Alta | RF002/RN01 e RF003/RN02. Caminhos de escopo, validação no serviço e edição de NC existente sem exercício | Quatorze casos em auditorias. Recusa início sem critérios ou com páginas inválidas, impede registros fora do escopo, verifica validação do serviço e bloqueio HTTP após conclusão. Edita NC preservando o arquivo e recalculando a severidade. Uma falha injetada na escrita do arquivo verifica que o banco reverte os dados novos e mantém a evidência original |
+| Média | RF001/UC-01. Duplicidade já testada no modelo, com lacuna na resposta ao usuário | Um caso verifica o detalhe do projeto, o erro de duplicidade no formulário e a quantidade de páginas |
+| Média | RF004/UC-04. Ordenação e severidade já testadas, com lacuna na combinação dos filtros de página e princípio | Um caso de consulta valida o resultado exato e a resposta sem apontamentos quando o princípio não corresponde |
+
+### Linhas identificadas e classificação das pendências
+
+| Arquivo | Linhas adicionais cobertas | Linhas que continuam descobertas e motivo |
+| --- | --- | --- |
+| `apps/auditorias/forms.py` | 69 | Nenhuma |
+| `apps/auditorias/models.py` | 74, 76, 109, 111, 208 | 30, 37, 105, 116–120, 146, 179, 212. Representações, acesso auxiliar a status/detalhes e descarte direto. A reversão de NC e a remoção em cascata já têm teste. A linha 58 protege a chamada direta a `Auditoria.concluir()`. O fluxo público com pendências já é exercitado pelo serviço e pela view |
+| `apps/auditorias/servicos.py` | 16, 18, 20, 41, 43, 51, 53 | Nenhuma |
+| `apps/auditorias/views.py` | 67–68, 72, 142, 144, 151–152, 204–205 | 85 trata a checagem do responsável após a checagem de visibilidade. 157–158 acrescentam uma validação do serviço ao formulário quando ela ocorre depois de o formulário ter sido aceito. Os perfis do MVP e os caminhos de erro verificáveis pelo fluxo regular foram priorizados |
+| `apps/contas/perfis.py` | — | 38 e 63 são acessos administrativos de superusuário, fora dos perfis do MVP |
+| `apps/normas/models.py` | — | 27 e 51 são representação e listagem auxiliar |
+| `apps/projetos/models.py`, `apps/projetos/views.py` | 20, 43 e 47–48, 58–59, respectivamente | Nenhuma |
+| `apps/relatorios/models.py` | — | 23 é representação textual do registro de emissão |
+
+As dez ramificações ainda abertas concentram-se em base sem versão vigente, guarda de pendências em método direto, detalhes auxiliares, descarte sem arquivo, caminhos alternativos de formulário e autorização administrativa. A falha de armazenamento testada ocorre durante o envio de uma nova captura e valida rollback do banco. Falhas posteriores a uma escrita física, concorrência e consistência entre banco e armazenamento continuam pendentes. O teste de bloqueio usa o cache local configurado e não verifica compartilhamento do bloqueio entre processos. O caminho de falha de renderização de relatório já tinha um teste e foi preservado.
+
+### Resultados da segunda rodada
+
+| Métrica em SQLite | Inicial | Final |
+| --- | --- | --- |
+| Testes sem E2E | 70 aprovados | 89 aprovados, 19 adicionais |
+| Linhas de `apps/` | 721/769 (93,758%) | 749/769 (97,399%), 28 adicionais |
+| Ramificações, execução com `--cov-branch` | 121/148 (81,757%) | 138/148 (93,243%), 17 adicionais |
+| Métrica combinada de linhas e ramificações | 842/917 (91,821%) | 887/917 (96,728%) |
+
+Também passaram 89 testes em PostgreSQL 16.16, com 749/769 linhas cobertas e nenhuma alteração de migrações detectada. Passaram os dois E2E em SQLite, com dez varreduras axe e zero violações detectadas. `ruff check .` e `ruff format --check .` passaram. Os novos testes passaram com o código de produção existente. O diff desta rodada contém apenas testes e a atualização destes documentos. A branch permanece local, preparada para revisão.
